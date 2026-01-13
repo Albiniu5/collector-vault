@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { getLegoSet } from '@/lib/external/lego'
-import { getCoin } from '@/lib/external/coins'
+import { getCoin, searchCoins, getCoinDetails } from '@/lib/external/coins'
 import { revalidatePath } from 'next/cache'
 
 export async function lookupItem(formData: FormData) {
@@ -18,9 +18,10 @@ export async function lookupItem(formData: FormData) {
     }
 
     if (type === 'coins') {
-        const data = await getCoin(query)
-        if (!data) return { error: 'Coin not found (Try "USA Quarter 1965")' }
-        return { data }
+        // Return a list of results for the user to pick from
+        const results = await searchCoins(query)
+        if (!results || results.length === 0) return { error: 'No coins found' }
+        return { results }
     }
 
     // Generic fallback for Books/Antiques (just return the query as a manual item)
@@ -34,37 +35,80 @@ export async function lookupItem(formData: FormData) {
     }
 }
 
-export async function ensureDefaultCollections() {
+export async function lookupCoinDetails(numistaId: number) {
+    const data = await getCoinDetails(numistaId)
+    if (!data) return { error: 'Failed to fetch coin details' }
+    return { data }
+}
+
+import { searchLens } from '@/lib/external/google-lens'
+
+export async function scanImage(formData: FormData) {
+    const file = formData.get('file') as File
+    if (!file) return { error: 'No file provided' }
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) return { error: 'Not authenticated' }
 
-    const defaults = [
-        { name: 'LEGO Collection', type: 'lego', description: 'My LEGO sets and bricks' },
-        { name: 'Coin Collection', type: 'coins', description: 'Rare and circulation coins' },
-        { name: 'Antique Collection', type: 'antiques', description: 'Vintage items and curiosities' },
-        { name: 'Book Collection', type: 'books', description: 'Rare books and first editions' }
-    ]
+    // Upload to 'scans' bucket
+    const path = `lens/${user.id}/${Date.now()}_${file.name}`
 
-    const { data: existing } = await supabase
-        .from('collections')
-        .select('type')
-        .eq('user_id', user.id)
+    // Auto-create bucket attempt
+    const { error: bucketError } = await supabase.storage.createBucket('scans', { public: true })
+    if (bucketError && !bucketError.message.includes('already exists')) {
+        // Log but continue, maybe it exists but we don't have create permissions
+        console.log('Bucket creation check:', bucketError.message)
+    }
 
-    const existingTypes = new Set(existing?.map(c => c.type))
+    // We attempt upload.
+    let bucketName = 'scans'
+    let { data, error: uploadError } = await supabase.storage
+        .from(bucketName)
+        .upload(path, file)
 
-    for (const def of defaults) {
-        if (!existingTypes.has(def.type)) {
-            await supabase.from('collections').insert({
-                user_id: user.id,
-                name: def.name,
-                type: def.type,
-                description: def.description,
-                icon: 'FOLDER'
-            })
+    // Fallback to 'avatars' if 'scans' fails (common public bucket)
+    if (uploadError) {
+        console.log('Scans bucket failed, trying avatars...')
+        bucketName = 'avatars'
+        const res = await supabase.storage
+            .from(bucketName)
+            .upload(path, file)
+
+        if (res.error) {
+            console.error('Avatars upload failed:', res.error)
+            return { error: 'Upload failed. Please create a public bucket named "scans" in Supabase.' }
         }
     }
+
+    // Get Public URL (or Signed URL if private)
+    // First try public
+    const { data: { publicUrl } } = supabase.storage
+        .from(bucketName)
+        .getPublicUrl(path)
+
+    // Check if public URL is accessible? (Skip complexity, send to Lens)
+
+    // Analyze with Lens
+    const matches = await searchLens(publicUrl)
+
+    // Map to generic results
+    if (matches.length > 0) {
+        return {
+            results: matches.map(m => ({
+                name: m.title,
+                country: m.source, // Misusing field slightly for display
+                year: null, // Lens doesn't reliably extract year
+                image_url: m.thumbnail,
+                source: 'lens', // Marker to handle differently in UI if needed
+                link: m.link
+            }))
+        }
+    }
+
+    return { error: 'No visual matches found' }
 }
+
 
 export async function addItem(collectionId: string, itemData: any) {
     const supabase = await createClient()
@@ -176,10 +220,14 @@ export async function refreshItemMetadata(itemId: string) {
     if (!item || !item.external_id) return { error: 'Item not found or has no Set Number' }
 
     // 2. Fetch fresh data
-    // Debug: Check if user has API keys
+    // Debug: Check if user has API keys or global key
     const { data: profile } = await supabase.from('profiles').select('brickset_api_key').eq('id', user.id).single()
-    if (!profile?.brickset_api_key) {
-        return { error: 'Brickset API Key is missing. Please add it in Settings to fetch RRP/Themes.' }
+
+    // Check for key in Profile OR Environment
+    const hasKey = profile?.brickset_api_key || process.env.BRICKSET_API_KEY
+
+    if (!hasKey) {
+        return { error: 'Brickset API Key is missing. Please contact admin to configure GLOBAL key.' }
     }
 
     const newData = await getLegoSet(item.external_id)

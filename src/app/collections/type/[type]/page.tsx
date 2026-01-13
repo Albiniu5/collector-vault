@@ -4,6 +4,7 @@ import Link from 'next/link'
 import AddIcon from '@mui/icons-material/Add'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import FilterListIcon from '@mui/icons-material/FilterList'
+import { CollectionCard } from '@/components/collection-card'
 
 interface PageProps {
     params: Promise<{
@@ -63,38 +64,30 @@ export default async function CollectionTypePage({ params }: PageProps) {
                 </div>
             </header>
 
-            {/* Grid */}
-            <div className="grid grid-3">
+            {/* Grid - Replaced with Strict Block Layout */}
+            <div style={{
+                display: 'block',
+                width: '100%',
+                maxWidth: '1600px',
+            }}>
                 {collections?.map((collection) => (
-                    <Link
-                        key={collection.id}
-                        href={`/collections/${collection.id}`}
-                        className="card card-interactive"
-                        style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            justifyContent: 'space-between',
-                            minHeight: '200px',
-                            textDecoration: 'none',
-                            position: 'relative',
-                            background: 'var(--surface-primary)',
-                        }}
-                    >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <span className="text-xs font-bold uppercase text-tertiary tracking-wider" style={{ background: 'var(--surface-secondary)', padding: '4px 8px', borderRadius: '4px' }}>
-                                {collection.subdivision || collection.type}
-                            </span>
-                        </div>
-
-                        <div style={{ marginTop: 'var(--space-6)' }}>
-                            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '4px', color: 'var(--text-primary)' }}>
-                                {collection.name}
-                            </h3>
-                            <p className="text-tertiary text-sm" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                                {collection.description || 'No description provided.'}
-                            </p>
-                        </div>
-                    </Link>
+                    <div key={collection.id} style={{
+                        display: 'inline-block',
+                        width: '350px',
+                        height: '262px',
+                        margin: '0 24px 24px 0',
+                        verticalAlign: 'top',
+                        maxWidth: '100%',
+                    }}>
+                        <CollectionCard
+                            data={{
+                                ...collection,
+                                totalValue: collection.items?.reduce((sum: number, item: any) => sum + (item.current_value || 0), 0) || 0,
+                                itemCount: collection.items?.length || 0
+                            }}
+                            currency="USD"
+                        />
+                    </div>
                 ))}
 
                 {/* Empty State */}

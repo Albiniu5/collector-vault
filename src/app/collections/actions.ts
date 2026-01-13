@@ -45,7 +45,7 @@ export async function createCollection(input: { name: string, type: string, desc
     }
 }
 
-export async function updateCollection(id: string, data: { name?: string, description?: string }) {
+export async function updateCollection(id: string, data: { name?: string, description?: string, image_url?: string }) {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -59,6 +59,7 @@ export async function updateCollection(id: string, data: { name?: string, descri
             .update({
                 ...(data.name && { name: data.name }),
                 ...(data.description !== undefined && { description: data.description }),
+                ...(data.image_url !== undefined && { image_url: data.image_url }),
             })
             .eq('id', id)
             .eq('user_id', user.id)
@@ -70,6 +71,45 @@ export async function updateCollection(id: string, data: { name?: string, descri
         return { success: true }
     } catch (error: any) {
         console.error('Error updating collection:', error)
+        return { success: false, message: error.message }
+    }
+}
+
+export async function deleteCollection(id: string) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+        return { success: false, message: 'Not authenticated' }
+    }
+
+    try {
+        // Items should cascade delete if set up in DB, but let's be safe or assume cascade works
+        // We will just delete the collection and let postgres handle cascade if configured,
+        // or we might need to delete items first.
+        // Assuming ON DELETE CASCADE is NOT set for safety, we delete items first.
+
+        // 1. Delete items
+        const { error: itemsError } = await supabase
+            .from('items')
+            .delete()
+            .eq('collection_id', id)
+
+        if (itemsError) throw itemsError
+
+        // 2. Delete collection
+        const { error: collectionError } = await supabase
+            .from('collections')
+            .delete()
+            .eq('id', id)
+            .eq('user_id', user.id) // Security check
+
+        if (collectionError) throw collectionError
+
+        revalidatePath('/')
+        return { success: true }
+    } catch (error: any) {
+        console.error('Error deleting collection:', error)
         return { success: false, message: error.message }
     }
 }

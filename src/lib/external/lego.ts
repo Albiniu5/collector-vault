@@ -107,8 +107,11 @@ export async function getLegoSet(query: string) {
 
     // IF REBRICKABLE FAILED, TRY BRICKLINK/BRICKSET FALLBACK
     if (!legoData) {
-        if (profile?.brickset_api_key) {
-            const bsDetails = await getBricksetSetDetails(profile.brickset_api_key, setNum)
+        // Use User's key OR Global Environment Key
+        const bricksetKey = profile?.brickset_api_key || process.env.BRICKSET_API_KEY
+
+        if (bricksetKey) {
+            const bsDetails = await getBricksetSetDetails(bricksetKey, setNum)
             if (bsDetails) {
                 legoData = {
                     set_num: setNum,
@@ -130,8 +133,9 @@ export async function getLegoSet(query: string) {
     if (!legoData) return null
 
     // ENRICH WITH BRICKSET (for RRP, Themes) — Only if not already captured
-    if (profile?.brickset_api_key && source !== 'brickset') {
-        const bsDetails = await getBricksetSetDetails(profile.brickset_api_key, setNum)
+    const bricksetKey = profile?.brickset_api_key || process.env.BRICKSET_API_KEY
+    if (bricksetKey && source !== 'brickset') {
+        const bsDetails = await getBricksetSetDetails(bricksetKey, setNum)
         if (bsDetails) extraData = bsDetails
     }
 
@@ -140,13 +144,13 @@ export async function getLegoSet(query: string) {
     let priceSource: 'estimate' | 'bricklink' | 'brickset' = 'estimate'
     let priceNew, priceUsed
 
-    if (profile?.bricklink_consumer_key) {
+    if (profile?.bricklink_consumer_key || process.env.BRICKLINK_CONSUMER_KEY) {
         try {
             const keys = {
-                consumer_key: profile.bricklink_consumer_key,
-                consumer_secret: profile.bricklink_consumer_secret,
-                token_value: profile.bricklink_token_value,
-                token_secret: profile.bricklink_token_secret
+                consumer_key: profile?.bricklink_consumer_key || process.env.BRICKLINK_CONSUMER_KEY!,
+                consumer_secret: profile?.bricklink_consumer_secret || process.env.BRICKLINK_CONSUMER_SECRET!,
+                token_value: profile?.bricklink_token_value || process.env.BRICKLINK_TOKEN_VALUE!,
+                token_secret: profile?.bricklink_token_secret || process.env.BRICKLINK_TOKEN_SECRET!
             }
             const userCurrency = profile.currency || 'USD'
             const [pN, pU] = await Promise.all([

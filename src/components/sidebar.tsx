@@ -3,28 +3,17 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import DashboardIcon from '@mui/icons-material/Dashboard'
-import FolderIcon from '@mui/icons-material/Folder' // Fallback for specific icons
-import GridViewIcon from '@mui/icons-material/GridView' // Use for collections
-import LocalMallIcon from '@mui/icons-material/LocalMall' // Market/Shop
+import { useTheme } from './theme-provider'
+import FolderIcon from '@mui/icons-material/Folder'
 import SettingsIcon from '@mui/icons-material/Settings'
 import MenuIcon from '@mui/icons-material/Menu'
 import CloseIcon from '@mui/icons-material/Close'
-import MonetizationOnIcon from '@mui/icons-material/MonetizationOn' // Coins
-import ExtensionIcon from '@mui/icons-material/Extension' // LEGO
-import MenuBookIcon from '@mui/icons-material/MenuBook' // Books
-import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty' // Antiques
-
-// Map categories to icons
-const getCategoryIcon = (type: string) => {
-    switch (type.toLowerCase()) {
-        case 'coins': return MonetizationOnIcon;
-        case 'lego': return ExtensionIcon;
-        case 'books': return MenuBookIcon;
-        case 'antiques': return HourglassEmptyIcon;
-        default: return FolderIcon;
-    }
-}
+import MonetizationOnIcon from '@mui/icons-material/MonetizationOn'
+import ExtensionIcon from '@mui/icons-material/Extension'
+import MenuBookIcon from '@mui/icons-material/MenuBook'
+import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty'
+import AddIcon from '@mui/icons-material/Add'
+import LocalOfferIcon from '@mui/icons-material/LocalOffer'
 
 interface Collection {
     id: string
@@ -40,36 +29,60 @@ interface SidebarProps {
 
 export function Sidebar({ collections, userEmail }: SidebarProps) {
     const [isOpen, setIsOpen] = useState(false)
+    const { theme, toggleTheme } = useTheme()
     const pathname = usePathname()
 
     const isActive = (path: string) => pathname === path || pathname?.startsWith(path)
 
     // Helper to render a navigation item
-    const NavItem = ({ href, icon: Icon, label, exact = false }: { href: string, icon: any, label: string, exact?: boolean }) => {
+    const NavItem = ({ href, icon: Icon, label, exact = false, isAction = false }: { href: string, icon: any, label: string, exact?: boolean, isAction?: boolean }) => {
         const active = exact ? pathname === href : isActive(href)
+
+        // Dynamic styles based on state
+        const linkStyle: React.CSSProperties = {
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '12px 16px',
+            borderRadius: '12px',
+            textDecoration: 'none',
+            transition: 'all 0.2s ease',
+            cursor: 'pointer',
+            fontSize: '0.95rem',
+            // Active vs Inactive colors
+            background: active ? 'var(--surface-secondary)' : 'transparent',
+            color: isAction
+                ? 'var(--accent-primary)'
+                : active ? 'var(--text-primary)' : 'var(--text-secondary)',
+            fontWeight: active || isAction ? 600 : 400
+        }
+
         return (
             <Link
                 href={href}
-                className="btn-ghost"
-                style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--space-3)',
-                    padding: '10px 16px',
-                    borderRadius: 'var(--radius-md)',
-                    textDecoration: 'none',
-                    color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    background: active ? 'var(--surface-secondary)' : 'transparent',
-                    fontWeight: active ? 600 : 400,
-                    fontSize: '0.9rem',
-                    transition: 'all 0.2s ease'
-                }}
+                style={linkStyle}
+                // Mouse over hover effect handled by simple inline unlikely, usually needs CSS class or state.
+                // For now, simpler inline is robust for layout, colors handled above.
+                className="sidebar-link"
             >
-                <Icon style={{ fontSize: '20px', color: active ? 'var(--accent-primary)' : 'inherit', opacity: active ? 1 : 0.7 }} />
+                <Icon style={{
+                    fontSize: '22px',
+                    color: isAction ? 'inherit' : (active ? 'var(--accent-primary)' : 'inherit'),
+                    opacity: active ? 1 : 0.7
+                }} />
                 <span>{label}</span>
             </Link>
         )
     }
+
+    // Default static categories to match the design concept
+    const categories = [
+        { id: 'lego', label: 'LEGO', icon: ExtensionIcon },
+        { id: 'coins', label: 'Coin Collection', icon: MonetizationOnIcon },
+        { id: 'books', label: 'Books', icon: MenuBookIcon },
+        { id: 'antiques', label: 'Antiques', icon: HourglassEmptyIcon },
+        { id: 'stamps', label: 'Stamps', icon: LocalOfferIcon },
+    ]
 
     return (
         <>
@@ -85,70 +98,103 @@ export function Sidebar({ collections, userEmail }: SidebarProps) {
             {/* Sidebar */}
             <aside
                 className={`sidebar ${isOpen ? 'mobile-open' : ''}`}
-                style={{ padding: 'var(--space-6) var(--space-4)' }}
+                style={{
+                    padding: '32px 20px',
+                    background: 'var(--surface-primary)', // Solid background
+                    borderRight: '1px solid var(--border-color)',
+                    boxShadow: '4px 0 24px rgba(0,0,0,0.2)' // Add depth
+                }}
             >
-                {/* Brand */}
-                <div style={{ padding: '0 12px', marginBottom: 'var(--space-8)' }}>
-                    <Link href="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ width: '24px', height: '24px', background: 'var(--accent-primary)', borderRadius: '6px' }}></div>
-                        <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>Vault</span>
-                    </Link>
+                {/* Brand Logo */}
+                <div style={{ padding: '0 12px', marginBottom: '48px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                        width: '32px', height: '32px',
+                        background: 'linear-gradient(135deg, #FF6B6B 0%, #FFE66D 100%)', // Colorful logo like image
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 12px rgba(255, 107, 107, 0.3)'
+                    }}></div>
+                    <span style={{ fontSize: '1.25rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Vault</span>
                 </div>
 
                 {/* Main Nav */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div className="text-tertiary text-xs font-bold uppercase" style={{ padding: '0 16px', marginBottom: '8px', letterSpacing: '0.05em' }}>Overview</div>
-                    <NavItem href="/" exact icon={DashboardIcon} label="Dashboard" />
-                    <NavItem href="/analytics" icon={GridViewIcon} label="Analytics" />
+                    {/* Categories from Design */}
+                    {categories.map(cat => (
+                        <NavItem
+                            key={cat.id}
+                            href={`/collections/type/${cat.id}`}
+                            icon={cat.icon}
+                            label={cat.label}
+                        />
+                    ))}
+
+                    {/* Add Collection Button */}
+                    <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                        <Link
+                            href="/?new=choose"
+                            className="sidebar-link"
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px',
+                                padding: '12px 16px',
+                                borderRadius: '12px',
+                                textDecoration: 'none',
+                                transition: 'all 0.2s ease',
+                                cursor: 'pointer',
+                                fontSize: '0.95rem',
+                                color: 'var(--text-secondary)',
+                                fontWeight: 500
+                            }}
+                        >
+                            <AddIcon style={{ fontSize: '22px' }} />
+                            <span>Add Collection</span>
+                        </Link>
+                    </div>
                 </div>
 
-                {/* Collections Categories */}
-                <div style={{ marginTop: 'var(--space-8)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div className="text-tertiary text-xs font-bold uppercase" style={{ padding: '0 16px', marginBottom: '8px', letterSpacing: '0.05em' }}>Collections</div>
-                    {/* 
-                         In a real app, these might filter the main view. 
-                         For now, we'll link to the first collection of that type or a filtered view.
-                         Assuming we just list all collections for now but cleaner. 
-                     */}
-                    {/* Hardcoded Categories for the "App" feel, mapping to specific collections if available */}
-                    <NavItem href="/collections/type/coins" icon={MonetizationOnIcon} label="Coins" />
-                    <NavItem href="/collections/type/lego" icon={ExtensionIcon} label="LEGO" />
-                    {/* Dynamic Collections List (Generic) */}
-                    {collections.slice(0, 5).map(c => {
-                        // Only show if not covered by main categories? Or just show all?
-                        // Let's show specific collections as sub-items if needed.
-                        // For this design, let's keep it clean.
-                        return null
-                    })}
-                    <NavItem href="/collections" icon={FolderIcon} label="All Collections" />
-                </div>
-
-                {/* System */}
-                <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <NavItem href="/settings" icon={SettingsIcon} label="Settings" />
-
-                    {userEmail && (
+                {/* User Section */}
+                <div style={{ marginTop: 'auto', paddingTop: '24px', borderTop: '1px solid var(--border-color)' }}>
+                    <div style={{ padding: '0 12px' }}>
                         <div style={{
-                            marginTop: 'var(--space-4)',
                             padding: '16px',
-                            borderTop: '1px solid var(--border-color)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '12px'
+                            background: 'var(--surface-secondary)',
+                            borderRadius: '16px',
+                            marginBottom: '12px'
                         }}>
-                            <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--surface-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700 }}>
-                                {userEmail[0].toUpperCase()}
-                            </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: '0.85rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis' }}>{userEmail.split('@')[0]}</div>
-                                <form action="/auth/signout" method="post">
-                                    <button type="submit" style={{ background: 'none', border: 'none', padding: 0, fontSize: '0.75rem', color: 'var(--text-tertiary)', cursor: 'pointer' }}>Sign out</button>
-                                </form>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Signed in as</div>
+                            <div style={{ fontWeight: 600, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {userEmail || 'User'}
                             </div>
                         </div>
-                    )}
-                </div>
 
+                        {/* Settings Link */}
+                        <Link
+                            href="/settings"
+                            className="btn btn-ghost"
+                            style={{ width: '100%', justifyContent: 'flex-start', gap: '12px', marginBottom: '8px' }}
+                        >
+                            <SettingsIcon style={{ fontSize: '20px' }} />
+                            <span>Settings</span>
+                        </Link>
+
+                        {/* Theme Toggle */}
+                        <button
+                            onClick={toggleTheme}
+                            className="btn btn-ghost"
+                            style={{ width: '100%', justifyContent: 'flex-start', gap: '12px' }}
+                        >
+                            <div style={{ fontSize: '18px' }}>
+                                {theme === 'dark' ? '☀️' : '🌙'}
+                            </div>
+                            <span>Switch to {theme === 'dark' ? 'Light' : 'Dark'} Mode</span>
+                        </button>
+
+                        <a href="/auth/signout" className="btn btn-ghost" style={{ width: '100%', justifyContent: 'flex-start', color: 'var(--text-tertiary)' }}>
+                            Sign Out
+                        </a>
+                    </div>
+                </div>
             </aside>
 
             {/* Mobile Overlay */}

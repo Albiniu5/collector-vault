@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { lookupItem, addItem } from '@/app/items/actions'
+import { lookupItem, addItem, lookupCoinDetails } from '@/app/items/actions'
 import { useRouter, useSearchParams } from 'next/navigation'
 import SearchIcon from '@mui/icons-material/Search'
 import CloseIcon from '@mui/icons-material/Close'
@@ -16,6 +16,7 @@ export function AddItemModal({ collectionId, collectionType, currencyCode = 'USD
     const [query, setQuery] = useState('')
     const [isSearching, setIsSearching] = useState(false)
     const [preview, setPreview] = useState<any>(null)
+    const [results, setResults] = useState<any[]>([]) // For multi-result layout
     const [error, setError] = useState('')
     const [isSuccess, setIsSuccess] = useState(false)
     const inputRef = useRef<HTMLInputElement>(null)
@@ -68,24 +69,53 @@ export function AddItemModal({ collectionId, collectionType, currencyCode = 'USD
         return () => clearTimeout(timer)
     }, [query, isOpen])
 
+    const [showAdvanced, setShowAdvanced] = useState(false)
+    const [advancedFields, setAdvancedFields] = useState({
+        country: '',
+        year: '',
+        material: '',
+        mintmark: ''
+    })
+
     const handleSearch = async (e?: React.FormEvent, searchQuery: string = query) => {
         e?.preventDefault()
-        if (!searchQuery.trim()) return
+
+        // Build effective query
+        let effectiveQuery = searchQuery
+        if (showAdvanced && collectionType === 'coins') {
+            const parts = [
+                advancedFields.country,
+                advancedFields.year,
+                advancedFields.material,
+                advancedFields.mintmark,
+                searchQuery
+            ].filter(Boolean)
+            effectiveQuery = parts.join(' ')
+        }
+
+        if (!effectiveQuery.trim()) return
 
         setIsSearching(true)
         setError('')
         setPreview(null)
+        setResults([]) // Reset previous results
         setPrice('')
 
         const formData = new FormData()
         formData.append('type', collectionType)
-        formData.append('query', searchQuery)
+        formData.append('query', effectiveQuery) // Send the combined query
+        // We could send individual fields if the backend supported precise filtering, 
+        // but constructing a strong query string is often better for Numista's text search.
 
         try {
             const res = await lookupItem(formData)
             if (res.error) {
                 setError(res.error)
+            } else if (res.results) {
+                // New Path: Multiple Results Found
+                setResults(res.results)
             } else {
+                // Classic Path: Single Result (e.g. Lego / fallback)
                 setPreview(res.data)
                 // Set initial price if available
                 if (res.data && 'price_estimate' in res.data && res.data.price_estimate) {
@@ -96,6 +126,28 @@ export function AddItemModal({ collectionId, collectionType, currencyCode = 'USD
             setError('Failed to search. Please try again.')
         } finally {
             setIsSearching(false)
+        }
+    }
+
+    const openFullSearch = () => {
+        const params = new URLSearchParams()
+        params.set('q', query)
+        params.set('type', collectionType)
+        params.set('collectionId', collectionId)
+        close()
+        router.push(`/search?${params.toString()}`)
+    }
+
+    const selectResult = async (numistaId: number) => {
+        setIsSearching(true)
+        const res = await lookupCoinDetails(numistaId)
+        setIsSearching(false)
+
+        if (res.error) {
+            setError(res.error)
+        } else {
+            setResults([]) // Clear list to show preview
+            setPreview(res.data)
         }
     }
 
@@ -199,36 +251,59 @@ export function AddItemModal({ collectionId, collectionType, currencyCode = 'USD
 
                     {/* Search Field */}
                     <form onSubmit={handleSearch} style={{ marginBottom: 'var(--space-8)', marginTop: 'var(--space-2)' }}>
-                        <div style={{ position: 'relative' }}>
-                            <input
-                                ref={inputRef}
-                                value={query}
-                                onChange={(e) => setQuery(e.target.value)}
-                                placeholder={collectionType === 'lego' ? "Type Set Number (e.g. 75192)" : "Search by Name..."}
-                                className="input-premium"
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <div style={{ position: 'relative', flex: 1 }}>
+                                <input
+                                    ref={inputRef}
+                                    value={query}
+                                    onChange={(e) => setQuery(e.target.value)}
+                                    placeholder={collectionType === 'lego' ? "Type Set Number (e.g. 75192)" : "Search by Name..."}
+                                    className="input-premium"
+                                    style={{
+                                        height: '72px',
+                                        fontSize: '1.25rem',
+                                        paddingLeft: 'var(--space-6)',
+                                        borderRadius: '24px',
+                                        boxShadow: 'var(--shadow-lg)',
+                                        border: '1px solid var(--border-color)',
+                                        background: 'var(--surface-secondary)',
+                                        color: 'var(--text-primary)',
+                                        width: '100%'
+                                    }}
+                                />
+                                <div style={{
+                                    position: 'absolute',
+                                    right: 'var(--space-6)',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    color: isSearching ? 'var(--accent-primary)' : 'var(--text-tertiary)'
+                                }}>
+                                    {isSearching ? (
+                                        <CircularProgress size={24} color="inherit" />
+                                    ) : (
+                                        <SearchIcon style={{ fontSize: '28px' }} />
+                                    )}
+                                </div>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={openFullSearch}
+                                title="Open Full Page Search"
+                                className="btn btn-secondary hover-scale"
                                 style={{
                                     height: '72px',
-                                    fontSize: '1.25rem',
-                                    paddingLeft: 'var(--space-6)',
+                                    width: '72px',
                                     borderRadius: '24px',
-                                    boxShadow: 'var(--shadow-lg)',
-                                    border: '1px solid var(--border-color)',
-                                    background: 'var(--surface-secondary)'
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                    boxShadow: 'var(--shadow-lg)'
                                 }}
-                            />
-                            <div style={{
-                                position: 'absolute',
-                                right: 'var(--space-6)',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                color: isSearching ? 'var(--accent-primary)' : 'var(--text-tertiary)'
-                            }}>
-                                {isSearching ? (
-                                    <CircularProgress size={24} color="inherit" />
-                                ) : (
-                                    <SearchIcon style={{ fontSize: '28px' }} />
-                                )}
-                            </div>
+                            >
+                                <span style={{ fontSize: '1.2rem' }}>⤢</span>
+                            </button>
                         </div>
                         {error && (
                             <div className="animate-fade-in" style={{
@@ -249,7 +324,132 @@ export function AddItemModal({ collectionId, collectionType, currencyCode = 'USD
                         )}
                     </form>
 
-                    {/* Result Card */}
+                    {/* Advanced Search Toggle (Coins Only) */}
+                    {collectionType === 'coins' && (
+                        <div className="mb-6 px-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowAdvanced(!showAdvanced)}
+                                className="text-secondary text-xs uppercase font-bold tracking-wider hover:text-primary transition-colors flex items-center gap-1"
+                            >
+                                {showAdvanced ? 'Hide Advanced Filters' : 'Show Advanced Filters'}
+                                <span style={{ transform: showAdvanced ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+                            </button>
+
+                            {/* Advanced Fields Grid */}
+                            {showAdvanced && (
+                                <div className="grid grid-cols-2 gap-3 mt-3 animate-fade-in-down">
+                                    <input
+                                        placeholder="Country (e.g. USA)"
+                                        value={advancedFields.country}
+                                        onChange={e => setAdvancedFields(prev => ({ ...prev, country: e.target.value }))}
+                                        style={{
+                                            background: 'var(--surface-secondary)',
+                                            border: '1px solid var(--border-color)',
+                                            padding: '8px 12px',
+                                            borderRadius: '8px',
+                                            color: 'var(--text-primary)',
+                                            fontSize: '0.9rem'
+                                        }}
+                                    />
+                                    <input
+                                        placeholder="Year (e.g. 1965)"
+                                        value={advancedFields.year}
+                                        onChange={e => setAdvancedFields(prev => ({ ...prev, year: e.target.value }))}
+                                        style={{
+                                            background: 'var(--surface-secondary)',
+                                            border: '1px solid var(--border-color)',
+                                            padding: '8px 12px',
+                                            borderRadius: '8px',
+                                            color: 'var(--text-primary)',
+                                            fontSize: '0.9rem'
+                                        }}
+                                    />
+                                    <input
+                                        placeholder="Material (e.g. Silver)"
+                                        value={advancedFields.material}
+                                        onChange={e => setAdvancedFields(prev => ({ ...prev, material: e.target.value }))}
+                                        style={{
+                                            background: 'var(--surface-secondary)',
+                                            border: '1px solid var(--border-color)',
+                                            padding: '8px 12px',
+                                            borderRadius: '8px',
+                                            color: 'var(--text-primary)',
+                                            fontSize: '0.9rem'
+                                        }}
+                                    />
+                                    <input
+                                        placeholder="Mintmark (e.g. D)"
+                                        value={advancedFields.mintmark}
+                                        onChange={e => setAdvancedFields(prev => ({ ...prev, mintmark: e.target.value }))}
+                                        style={{
+                                            background: 'var(--surface-secondary)',
+                                            border: '1px solid var(--border-color)',
+                                            padding: '8px 12px',
+                                            borderRadius: '8px',
+                                            color: 'var(--text-primary)',
+                                            fontSize: '0.9rem'
+                                        }}
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Multiple Results Grid */}
+                    {results.length > 0 && !preview && (
+                        <div className="animate-fade-in-up" style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100%', minHeight: 0 }}>
+                            <h3 className="text-secondary text-xs uppercase font-bold tracking-wider mb-3 px-2 flex-shrink-0">
+                                Found {results.length} Matches
+                            </h3>
+                            <div className="grid grid-cols-2 gap-3" style={{
+                                overflowY: 'auto',
+                                paddingRight: '4px',
+                                paddingBottom: '20px',
+                                flex: 1 // Fill remaining space
+                            }}>
+                                {results.map((item) => (
+                                    <div
+                                        key={item.numista_id}
+                                        onClick={() => selectResult(item.numista_id)}
+                                        className="card hover-scale"
+                                        style={{
+                                            padding: '12px',
+                                            cursor: 'pointer',
+                                            border: '1px solid var(--border-color)',
+                                            background: 'var(--surface-secondary)',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            textAlign: 'center',
+                                            gap: '8px',
+                                            height: 'fit-content' // Don't stretch vertically
+                                        }}
+                                    >
+                                        <div style={{
+                                            width: '60px', height: '60px',
+                                            borderRadius: '50%',
+                                            overflow: 'hidden',
+                                            background: 'var(--surface-tertiary)',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                        }}>
+                                            {item.image_url ? (
+                                                <img src={item.image_url} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            ) : (
+                                                <div className="text-xs text-secondary">No Img</div>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <div className="font-bold text-sm line-clamp-2 leading-tight" style={{ color: 'var(--text-primary)' }}>{item.name}</div>
+                                            <div className="text-xs text-secondary mt-1">{item.country} • {item.year}</div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Result Card (Single Preview) */}
                     {preview && (
                         <div className="card animate-fade-in-up" style={{
                             border: 'none',
@@ -258,6 +458,7 @@ export function AddItemModal({ collectionId, collectionType, currencyCode = 'USD
                             overflow: 'hidden',
                             boxShadow: 'var(--shadow-xl)'
                         }}>
+                            {/* Error Message */}
                             {/* Image Header */}
                             <div style={{
                                 height: '240px',
@@ -335,14 +536,18 @@ export function AddItemModal({ collectionId, collectionType, currencyCode = 'USD
                                         <input
                                             type="number"
                                             value={price}
-                                            onChange={(e) => setPrice(e.target.value)}
-                                            placeholder="0.00"
+                                            readOnly
+                                            disabled
                                             className="input-premium"
                                             style={{
                                                 paddingLeft: '32px',
                                                 fontSize: '1.5rem',
                                                 fontWeight: 700,
-                                                height: '64px'
+                                                height: '64px',
+                                                background: 'var(--surface-tertiary)',
+                                                cursor: 'not-allowed',
+                                                opacity: 0.8,
+                                                color: 'var(--text-secondary)'
                                             }}
                                         />
                                     </div>

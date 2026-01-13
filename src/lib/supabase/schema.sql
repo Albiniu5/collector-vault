@@ -49,6 +49,7 @@ create table public.collections (
   description text,
   type text not null default 'generic', -- 'lego', 'coins', 'memorabilia', 'generic'
   icon text,
+  image_url text, -- Custom cover image
   created_at timestamptz default now()
 );
 

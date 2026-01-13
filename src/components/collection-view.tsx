@@ -14,6 +14,8 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import EditIcon from '@mui/icons-material/Edit'
 import SaveIcon from '@mui/icons-material/Save'
 import Link from 'next/link'
+import { DeleteCollectionButton } from './delete-collection-button'
+import { ImageUpload } from './image-upload'
 
 interface Item {
     id: string
@@ -30,6 +32,7 @@ interface Collection {
     name: string
     type: string
     description: string | null
+    image_url?: string | null
 }
 
 export function CollectionView({ collection, items, currencyCode }: { collection: Collection, items: Item[], currencyCode: string }) {
@@ -46,6 +49,7 @@ export function CollectionView({ collection, items, currencyCode }: { collection
     const [isEditing, setIsEditing] = useState(false)
     const [editName, setEditName] = useState(collection.name)
     const [editDescription, setEditDescription] = useState(collection.description || '')
+    const [editImageUrl, setEditImageUrl] = useState(collection.image_url || '')
     const [isSaving, setIsSaving] = useState(false)
 
     const toggleSelection = (id: string) => {
@@ -104,7 +108,11 @@ export function CollectionView({ collection, items, currencyCode }: { collection
     const handleSaveCollection = async () => {
         if (!editName.trim()) return
         setIsSaving(true)
-        const res = await updateCollection(collection.id, { name: editName, description: editDescription })
+        const res = await updateCollection(collection.id, {
+            name: editName,
+            description: editDescription,
+            image_url: editImageUrl
+        })
         if (res.success) {
             setIsEditing(false)
             router.refresh()
@@ -220,6 +228,11 @@ export function CollectionView({ collection, items, currencyCode }: { collection
                                     placeholder="Add a description for your collection..."
                                     style={{ width: '100%', minHeight: '80px', resize: 'vertical', fontFamily: 'inherit' }}
                                 />
+                                <label className="text-xs font-bold uppercase text-secondary mb-1 block" style={{ marginTop: 'var(--space-3)' }}>Cover Image (Upload or URL)</label>
+                                <ImageUpload
+                                    value={editImageUrl}
+                                    onChange={setEditImageUrl}
+                                />
                                 <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-3)', justifyContent: 'flex-end' }}>
                                     <button onClick={() => setIsEditing(false)} disabled={isSaving} className="btn btn-ghost btn-sm">
                                         Cancel
@@ -256,7 +269,10 @@ export function CollectionView({ collection, items, currencyCode }: { collection
                                 {formatPrice(totalValue)}
                             </div>
                         </div>
-                        <AddItemModal collectionId={collection.id} collectionType={collection.type} currencyCode={currencyCode} />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
+                            <AddItemModal collectionId={collection.id} collectionType={collection.type} currencyCode={currencyCode} />
+                            <DeleteCollectionButton collectionId={collection.id} collectionName={collection.name} />
+                        </div>
                     </div>
                 </div>
             </div>

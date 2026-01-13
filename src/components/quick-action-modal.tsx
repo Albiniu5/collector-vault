@@ -77,6 +77,7 @@ export function QuickActionModal({ collections }: QuickActionModalProps) {
             return
         }
 
+        // Initialize state
         setIsCreating(true)
         setErrorMessage(null)
 
@@ -105,6 +106,7 @@ export function QuickActionModal({ collections }: QuickActionModalProps) {
             }
         } catch (e: any) {
             console.error('Client: Error', e)
+            alert('Debug: Client Error: ' + e.message)
             setErrorMessage(e.message || 'Failed to create collection')
         } finally {
             setIsCreating(false)
